@@ -1,4 +1,5 @@
 import os
+from ast import literal_eval
 import pandas as pd
 import numpy as np
 from sklearn import ensemble
@@ -23,6 +24,7 @@ TRAINING_DATA_Y = config.get('main', 'TRAINING_DATA_Y')
 TEST_DATA = config.get('main', 'TEST_DATA')
 MODEL = config.get('main', 'MODEL')
 SAVE = config.get('main', 'SAVE')
+seed = literal_eval(config.get('main', 'seed'))
 
 FOLD_MAPPPING = {
     0: [1, 2, 3, 4],
@@ -38,6 +40,7 @@ if __name__ == "__main__":
     df_test = pd.read_csv(TEST_DATA)
     target_cols = df_y.columns.tolist()
     target_cols.remove('sig_id')
+    test_idx = df_test["sig_id"].values
     predictions = None
 
     df = pd.merge(df_x, df_y, on = 'sig_id', how = 'left')
@@ -49,6 +52,7 @@ if __name__ == "__main__":
                                     encoding_type="label",
                                     handle_na=True, save=True)
     df = cat_feats.fit_transform()
+    df_test = cat_feats.transform(df_test)
 
     for target_col in target_cols:
 
@@ -71,13 +75,19 @@ if __name__ == "__main__":
             # Oversampling
             train_df, ytrain = oversample_minority_svm(train_df, ytrain)
 
-            # data is ready to train
-            print(MODEL)
-            clf = dispatcher.MODELS[MODEL]
-            setattr(clf, 'random_state', 123) 
-            print(target_col)
-            clf.fit(train_df, ytrain)
-            preds = clf.predict_proba(valid_df)[:, 1]
+            predictions = None
+
+            for r in seed:
+                # data is ready to train
+                print(MODEL)
+                clf = dispatcher.MODELS[MODEL]
+                setattr(clf, 'random_state', r) 
+                print(target_col)
+                clf.fit(train_df, ytrain)
+                preds_valid = clf.predict_proba(valid_df)[:, 1]
+                pred_test = clf.predict_proba(test_df)[:, 1]
+
+                
             print("Fold : ", FOLD)
             print("train_shape : ", str(train_df.shape))
             print("valid_shape : ", str(valid_df.shape))

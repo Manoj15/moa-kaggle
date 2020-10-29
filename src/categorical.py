@@ -1,8 +1,9 @@
 from sklearn import preprocessing
+import joblib
 
 
 class CategoricalFeatures:
-    def __init__(self, df, categorical_features, encoding_type, handle_na=False):
+    def __init__(self, df, categorical_features, encoding_type, handle_na=False, save=False):
         """
         df: pandas dataframe
         categorical_features: list of column names, e.g. ["ord_1", "nom_0"......]
@@ -16,6 +17,7 @@ class CategoricalFeatures:
         self.label_encoders = dict()
         self.binary_encoders = dict()
         self.ohe = None
+        self.save=save
 
         if self.handle_na:
             for c in self.cat_feats:
@@ -28,6 +30,8 @@ class CategoricalFeatures:
             lbl.fit(self.df[c].values)
             self.output_df.loc[:, c] = lbl.transform(self.df[c].values)
             self.label_encoders[c] = lbl
+        if self.save:
+            joblib.dump(lbl, f"./models/label_encoder.pkl")
         return self.output_df
     
     def _label_binarization(self):
@@ -84,31 +88,31 @@ class CategoricalFeatures:
             raise Exception("Encoding type not understood")
                 
 
-if __name__ == "__main__":
-    import pandas as pd
-    from sklearn import linear_model
-    df = pd.read_csv("../input/train_cat.csv")
-    df_test = pd.read_csv("../input/test_cat.csv")
-    sample = pd.read_csv("../input/sample_submission.csv")
+# if __name__ == "__main__":
+#     import pandas as pd
+#     from sklearn import linear_model
+#     df = pd.read_csv("../input/train_cat.csv")
+#     df_test = pd.read_csv("../input/test_cat.csv")
+#     sample = pd.read_csv("../input/sample_submission.csv")
 
-    train_len = len(df)
+#     train_len = len(df)
 
-    df_test["target"] = -1
-    full_data = pd.concat([df, df_test])
+#     df_test["target"] = -1
+#     full_data = pd.concat([df, df_test])
 
-    cols = [c for c in df.columns if c not in ["id", "target"]]
-    cat_feats = CategoricalFeatures(full_data, 
-                                    categorical_features=cols, 
-                                    encoding_type="ohe",
-                                    handle_na=True)
-    full_data_transformed = cat_feats.fit_transform()
+#     cols = [c for c in df.columns if c not in ["id", "target"]]
+#     cat_feats = CategoricalFeatures(full_data, 
+#                                     categorical_features=cols, 
+#                                     encoding_type="ohe",
+#                                     handle_na=True)
+#     full_data_transformed = cat_feats.fit_transform()
     
-    X = full_data_transformed[:train_len, :]
-    X_test = full_data_transformed[train_len:, :]
+#     X = full_data_transformed[:train_len, :]
+#     X_test = full_data_transformed[train_len:, :]
 
-    clf = linear_model.LogisticRegression()
-    clf.fit(X, df.target.values)
-    preds = clf.predict_proba(X_test)[:, 1]
+#     clf = linear_model.LogisticRegression()
+#     clf.fit(X, df.target.values)
+#     preds = clf.predict_proba(X_test)[:, 1]
     
-    sample.loc[:, "target"] = preds
-    sample.to_csv("submission.csv", index=False)
+#     sample.loc[:, "target"] = preds
+#     sample.to_csv("submission.csv", index=False)

@@ -45,6 +45,10 @@ if __name__ == "__main__":
         ytrain = train_df[target_cols].values
         yvalid = valid_df[target_cols].values
 
+        from imblearn.over_sampling import SVMSMOTE 
+        sm = SVMSMOTE(random_state=42)
+        train_df, ytrain = sm.fit_resample(train_df, ytrain)
+
         train_df = train_df.drop(["id","kfold"] + target_cols, axis=1)
         valid_df = valid_df.drop(["id", "kfold"] + target_cols, axis=1)
 

@@ -11,6 +11,10 @@ from .create_folds import create_kfolds
 print(os.getcwd())
 from . import dispatcher
 
+from .feature_generator import oversample_minority_svm
+
+from .categorical import CategoricalFeatures
+
 # Read Config
 config = ConfigParser()
 config.read('./src/config.ini')
@@ -38,6 +42,14 @@ if __name__ == "__main__":
 
     df = pd.merge(df_x, df_y, on = 'sig_id', how = 'left')
 
+    # Preprocessing
+    # Converting Categorical Data to Numerical Data
+    cat_feats = CategoricalFeatures(df, 
+                                    categorical_features=['cp_dose','cp_type','cp_time'], 
+                                    encoding_type="label",
+                                    handle_na=True, save=True)
+    df = cat_feats.fit_transform()
+
     for target_col in target_cols:
 
         df = create_kfolds(df, target_col)
@@ -53,32 +65,31 @@ if __name__ == "__main__":
             train_df = train_df.drop(["sig_id","kfold"] + target_cols, axis=1)
             valid_df = valid_df.drop(["sig_id", "kfold"] + target_cols, axis=1)
 
-            valid_df = valid_df[train_df.columns]
-
-            label_encoders = {}
-            for c in ['cp_dose','cp_type','cp_time']:
-                lbl = preprocessing.LabelEncoder()
-                train_df.loc[:, c] = train_df.loc[:, c].astype(str).fillna("NONE")
-                valid_df.loc[:, c] = valid_df.loc[:, c].astype(str).fillna("NONE")
-                df_test.loc[:, c] = df_test.loc[:, c].astype(str).fillna("NONE")
-                lbl.fit(train_df[c].values.tolist() + 
-                        valid_df[c].values.tolist() + 
-                        df_test[c].values.tolist())
-                train_df.loc[:, c] = lbl.transform(train_df[c].values.tolist())
-                valid_df.loc[:, c] = lbl.transform(valid_df[c].values.tolist())
-                label_encoders[c] = lbl
+            # Sort columns based on train df
+            valid_df = valid_df[train_df.columns]            
             
+            # Oversampling
+            train_df, ytrain = oversample_minority_svm(train_df, ytrain)
+
             # data is ready to train
+            print(MODEL)
             clf = dispatcher.MODELS[MODEL]
+            setattr(clf, 'random_state', 123) 
             print(target_col)
             clf.fit(train_df, ytrain)
             preds = clf.predict_proba(valid_df)[:, 1]
             print("Fold : ", FOLD)
             print("train_shape : ", str(train_df.shape))
             print("valid_shape : ", str(valid_df.shape))
-            # print('Class Ratio : ', str((np.count_nonzero(ytrain == 1)/ytrain.shape[0])*100))
-            print('Class Ratio : ', str(np.count_nonzero(ytrain == 1)))
+            print('Train Class Ratio : ', str((np.count_nonzero(ytrain == 1)/ytrain.shape[0])*100))
+            print('Valid Class Ratio : ', str((np.count_nonzero(yvalid == 1)/ytrain.shape[0])*100))
+            # print('Class Ratio : ', str(np.count_nonzero(ytrain == 1)))
             print('AUC of {0} is '.format(target_col),metrics.roc_auc_score(yvalid, preds))
+            print('Log Loss of {0} is '.format(target_col),metrics.log_loss(yvalid, preds))
+            # auc = []
+            # auc.append(metrics.roc_auc_score(yvalid, preds))
+            # print(auc)
+            # print(preds[:5])
 
         break
 

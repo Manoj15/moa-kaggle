@@ -44,8 +44,8 @@ if __name__ == "__main__":
 
         for FOLD in FOLD_MAPPPING.keys():
 
-            train_df = df[df.kfold.isin(FOLD_MAPPPING.get(FOLD))].reset_index(drop=True)
-            valid_df = df[df.kfold==FOLD].reset_index(drop=True)
+            train_df = df[(df.kfold.isin(FOLD_MAPPPING.get(FOLD))) & (df['cp_type'] != "ctl_vehicle")].reset_index(drop=True)
+            valid_df = df[(df.kfold==FOLD) & (df['cp_type'] != "ctl_vehicle")].reset_index(drop=True)
 
             ytrain = train_df[target_col].values
             yvalid = valid_df[target_col].values
@@ -72,21 +72,16 @@ if __name__ == "__main__":
             clf = dispatcher.MODELS[MODEL]
             print(target_col)
             clf.fit(train_df, ytrain)
-            print('FINISHED TRAINING')
-            print(ytrain)
             preds = clf.predict_proba(valid_df)[:, 1]
+            print("Fold : ", FOLD)
+            print("train_shape : ", str(train_df.shape))
+            print("valid_shape : ", str(valid_df.shape))
+            # print('Class Ratio : ', str((np.count_nonzero(ytrain == 1)/ytrain.shape[0])*100))
+            print('Class Ratio : ', str(np.count_nonzero(ytrain == 1)))
+            print('AUC of {0} is '.format(target_col),metrics.roc_auc_score(yvalid, preds))
 
-            if FOLD == 0:
-                predictions = preds
-            else:
-                predictions += preds
-    
-            predictions /= 5
+        break
 
-            print('AUC of {0} is '.format(target_col),metrics.roc_auc_score(yvalid, predictions))
-
-            break
-
-            if SAVE == True:
-                joblib.dump(clf, f"models/{MODEL}_{FOLD}.pkl")
-                joblib.dump(train_df.columns, f"models/{MODEL}_{FOLD}_columns.pkl")
+        if SAVE == True:
+            joblib.dump(clf, f"models/{MODEL}_{FOLD}.pkl")
+            joblib.dump(train_df.columns, f"models/{MODEL}_{FOLD}_columns.pkl")

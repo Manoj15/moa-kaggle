@@ -39,8 +39,8 @@ if __name__ == "__main__":
 
     for FOLD in FOLD_MAPPPING.keys():
 
-        train_df = df[df.kfold.isin(FOLD_MAPPPING.get(FOLD))].reset_index(drop=True)
-        valid_df = df[df.kfold==FOLD].reset_index(drop=True)
+        train_df = df[(df.kfold.isin(FOLD_MAPPPING.get(FOLD))) & (df['cp_type'] != "ctl_vehicle")].reset_index(drop=True)
+        valid_df = df[(df.kfold==FOLD) & (df['cp_type'] != "ctl_vehicle")].reset_index(drop=True)
 
         ytrain = train_df[target_cols].values
         yvalid = valid_df[target_cols].values

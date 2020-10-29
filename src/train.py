@@ -4,13 +4,20 @@ from sklearn import ensemble
 from sklearn import preprocessing
 from sklearn import metrics
 import joblib
+from configparser import ConfigParser
+from .create_folds import create_kfolds
 
+print(os.getcwd())
 from . import dispatcher
 
-TRAINING_DATA = os.environ.get("TRAINING_DATA")
-TEST_DATA = os.environ.get("TEST_DATA")
-FOLD = int(os.environ.get("FOLD"))
-MODEL = os.environ.get("MODEL")
+# Read Config
+config = ConfigParser()
+config.read('./src/config.ini')
+TRAINING_DATA_X = config.get('main', 'TRAINING_DATA_X')
+TRAINING_DATA_Y = config.get('main', 'TRAINING_DATA_Y')
+TEST_DATA = config.get('main', 'TEST_DATA')
+MODEL = config.get('main', 'MODEL')
+SAVE = config.get('main', 'SAVE')
 
 FOLD_MAPPPING = {
     0: [1, 2, 3, 4],
@@ -21,38 +28,56 @@ FOLD_MAPPPING = {
 }
 
 if __name__ == "__main__":
-    df = pd.read_csv(TRAINING_DATA)
+    df_x = pd.read_csv(TRAINING_DATA_X)
+    df_y = pd.read_csv(TRAINING_DATA_Y)
     df_test = pd.read_csv(TEST_DATA)
-    train_df = df[df.kfold.isin(FOLD_MAPPPING.get(FOLD))].reset_index(drop=True)
-    valid_df = df[df.kfold==FOLD].reset_index(drop=True)
+    target_cols = df_y.columns.tolist()
+    predictions = None
 
-    ytrain = train_df.target.values
-    yvalid = valid_df.target.values
+    df = pd.merge(df, df_y, on = 'sig_id', how = 'left')
+    df = create_kfolds(df, target_col,SAVE = True)
 
-    train_df = train_df.drop(["id", "target", "kfold"], axis=1)
-    valid_df = valid_df.drop(["id", "target", "kfold"], axis=1)
+    for FOLD in FOLD_MAPPPING.keys():
 
-    valid_df = valid_df[train_df.columns]
+        train_df = df[df.kfold.isin(FOLD_MAPPPING.get(FOLD))].reset_index(drop=True)
+        valid_df = df[df.kfold==FOLD].reset_index(drop=True)
 
-    label_encoders = {}
-    for c in train_df.columns:
-        lbl = preprocessing.LabelEncoder()
-        train_df.loc[:, c] = train_df.loc[:, c].astype(str).fillna("NONE")
-        valid_df.loc[:, c] = valid_df.loc[:, c].astype(str).fillna("NONE")
-        df_test.loc[:, c] = df_test.loc[:, c].astype(str).fillna("NONE")
-        lbl.fit(train_df[c].values.tolist() + 
-                valid_df[c].values.tolist() + 
-                df_test[c].values.tolist())
-        train_df.loc[:, c] = lbl.transform(train_df[c].values.tolist())
-        valid_df.loc[:, c] = lbl.transform(valid_df[c].values.tolist())
-        label_encoders[c] = lbl
+        ytrain = train_df[target_cols].values
+        yvalid = valid_df[target_cols].values
+
+        train_df = train_df.drop(["id","kfold"] + target_cols, axis=1)
+        valid_df = valid_df.drop(["id", "kfold"] + target_cols, axis=1)
+
+        valid_df = valid_df[train_df.columns]
+
+        # label_encoders = {}
+        # for c in train_df.columns:
+        #     lbl = preprocessing.LabelEncoder()
+        #     train_df.loc[:, c] = train_df.loc[:, c].astype(str).fillna("NONE")
+        #     valid_df.loc[:, c] = valid_df.loc[:, c].astype(str).fillna("NONE")
+        #     df_test.loc[:, c] = df_test.loc[:, c].astype(str).fillna("NONE")
+        #     lbl.fit(train_df[c].values.tolist() + 
+        #             valid_df[c].values.tolist() + 
+        #             df_test[c].values.tolist())
+        #     train_df.loc[:, c] = lbl.transform(train_df[c].values.tolist())
+        #     valid_df.loc[:, c] = lbl.transform(valid_df[c].values.tolist())
+        #     label_encoders[c] = lbl
+        
+        for target_col in target_cols:
+            # data is ready to train
+            clf = dispatcher.MODELS[MODEL]
+            clf.fit(train_df, ytrain[target_col])
+            preds[target_col] = clf.predict_proba(valid_df)[:, 1]
+
+            if FOLD == 0:
+                predictions = preds[target_col].values
+            else:
+                predictions += preds[target_col].values
     
-    # data is ready to train
-    clf = dispatcher.MODELS[MODEL]
-    clf.fit(train_df, ytrain)
-    preds = clf.predict_proba(valid_df)[:, 1]
-    print(metrics.roc_auc_score(yvalid, preds))
+            predictions /= 5
 
-    joblib.dump(label_encoders, f"models/{MODEL}_{FOLD}_label_encoder.pkl")
-    joblib.dump(clf, f"models/{MODEL}_{FOLD}.pkl")
-    joblib.dump(train_df.columns, f"models/{MODEL}_{FOLD}_columns.pkl")
+            print('AUC of {0} is '.format(target_col),metrics.roc_auc_score(yvalid[target_col], predictions))
+
+        if SAVE == True:
+            joblib.dump(clf, f"models/{MODEL}_{FOLD}.pkl")
+            joblib.dump(train_df.columns, f"models/{MODEL}_{FOLD}_columns.pkl")

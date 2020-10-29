@@ -81,9 +81,13 @@ class CrossValidation:
 
 
 if __name__ == "__main__":
-    df = pd.read_csv("../input/train_multilabel.csv")
-    cv = CrossValidation(df, shuffle=True, target_cols=["attribute_ids"], 
-                         problem_type="multilabel_classification", multilabel_delimiter=" ")
+    df = pd.read_csv("../input/train_targets_scored.csv")
+    target_cols = df.columns[1:]
+    df['combined'] = df[target_cols].apply(lambda row: ','.join(row.values.astype(str)), axis=1)
+    print(df['combined'].head())
+    cv = CrossValidation(df, shuffle=True, target_cols=['combined'], 
+                         problem_type="multilabel_classification", multilabel_delimiter=",")
     df_split = cv.split()
     print(df_split.head())
     print(df_split.kfold.value_counts())
+    df.to_csv("../input/train_folds.csv", index=False)
